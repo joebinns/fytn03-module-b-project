@@ -1,5 +1,10 @@
 from PIL import Image
 import numpy as np
+import time
+from copy import deepcopy
+
+''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Initiate timer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
+startedRunning = time.perf_counter()
 
 ''' ~~~~~~~~~~~~~~~~~ Import image and convert to matrix ~~~~~~~~~~~~~~~~~~ '''
 imgInPath = "LOTF_GS_RECTANGLED.jpg" # path of the image with mask applied
@@ -8,7 +13,7 @@ imgIm = Image.open(imgInPath)
 imgIm = imgIm.convert('L') # converts image to grayscale.
 imgMat = np.array(imgIm) # gets array of image.
 
-width, length = imgIm.size #defines the matrix dims 
+#canvasWidth, canvasHeight = imgIm.size #defines the matrix dims 
 
 ''' ~~~~~~~~~~~~~~~~~~ Import mask and convert to matrix ~~~~~~~~~~~~~~~~~~ '''
 maskInPath = "LOTF_GS_RECTANGLES.jpg" # path of the mask which has been applied
@@ -73,7 +78,7 @@ def IsMask(i):
         isMask {bool}: wether or not the pixel intensity qualifies as a mask or not (i.e. 0 is a mask, 255 is not).
     '''
     isMask = False
-    if (i == 0 or i == 1): # i == 1 is a temporary fix. For some unknown reason, the imported mask matrix has values of 0 and 1 (on a scale of [0, 255]) for the black, whereas we expect only 0. 
+    if (i < 255 * 0.9): # i == 1 is a temporary fix. For some unknown reason, the imported mask matrix has values of 0 and 1 (on a scale of [0, 255]) for the black, whereas we expect only 0. 
         isMask = True
     return isMask
 
@@ -90,7 +95,12 @@ def FindNeighbours(canvas, submasks, p):
         [p[0], p[1] + 1], # South
         [p[0] + 1, p[1]], # East
         [p[0], p[1] - 1], # West
-        [p[0] - 1, p[1]] # North
+        [p[0] - 1, p[1]], # North
+        
+        #[p[0] + 1, p[1] + 1], # South-East
+        #[p[0] - 1, p[1] + 1], # South-West
+        #[p[0] + 1, p[1] - 1], # North-East
+        #[p[0] - 1, p[1] - 1] # North-West
     ]
     # Exclude the neighbors that are out of bounds, already in another submask, or should not be coloured.
     neighbours = []
@@ -149,56 +159,105 @@ for submask in submasks:
         for x in range(0, len(imgMat[0])):
             if (IsMask(I(x, y, canvas = submask))):
                 if (x < minX):
-                    minX = x
+                    minX = x-1
                 elif (x > maxX):
-                    maxX = x
+                    maxX = x+3
                 if (y < minY):
-                    minY = y
+                    minY = y-1
                 elif (y > maxY):
-                    maxY = y
-    for y in range(minY, maxY+1):
+                    maxY = y+4
+    for y in range(minY, maxY):
         row = []
-        for x in range(minX, maxX+1):
+        for x in range(minX, maxX):
             row.append(I(x, y, canvas = submask))
         reducedSubmask.append(row)
     reducedSubmasks.append(reducedSubmask)
     reducedSubmasksOrigins.append([minX, minY])
 
-for submask in reducedSubmasks:
-    print(submask)
+#for submask in reducedSubmasks:
+#    print(submask)
     
-print(len(reducedSubmasks))
+#print(len(reducedSubmasks))
 
+''' ~~~~~~~~~~~ Calculating the average from all the boundaries ~~~~~~~~~~~ '''
+averages = []
+for i in range(0, len(reducedSubmasks)):
+    submask = reducedSubmasks[i]
+    averageTally = 0
+    pixelsAveraged = 0   
+    for y in range(len(submask)):
+        for x in range(len(submask[y])):
+            if (IsMask(I(x, y, canvas = submask)) == False):
+                offX = x+reducedSubmasksOrigins[i][0]
+                offY = y+reducedSubmasksOrigins[i][1]
+                
+                averageTally += I(offX, offY, canvas = imgMat)
+                pixelsAveraged += 1
+    if (pixelsAveraged > 0):
+        averages.append(int(averageTally/pixelsAveraged))
+    else:
+        averages.append(int((0+255)/2))
+
+''' ~~~~~~~ Setting the mask regions in the image to their average ~~~~~~~~ '''  
+for i in range(0, len(reducedSubmasks)):
+    submask = reducedSubmasks[i]  
+    for y in range(len(submask)):
+        for x in range(len(submask[y])):
+            if (IsMask(I(x, y, canvas = submask))):
+                offX = x+reducedSubmasksOrigins[i][0]
+                offY = y+reducedSubmasksOrigins[i][1]
+                
+                imgMat[offY, offX] = averages[i]
+
+print(averages)
+print(len(submasks))
+
+# Displaying a submask
+reducedSubmask1OutPath = "REDUCEDSUBMASK_1.jpg"
+reducedSubmasks[0] = np.array(reducedSubmasks[0])
+reducedSubmask1Im = Image.fromarray(reducedSubmasks[0])
+reducedSubmask1Im = reducedSubmask1Im.convert("L")
+reducedSubmask1Im.save(reducedSubmask1OutPath)
+
+reducedSubmask1Im.show(title = "reduced submask 1") #showing masked image
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Solving ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
+startedRunningSolving = time.perf_counter()
 
-#wmaskpri = wmask #defining my working image for Jacobi method
-wmask = imgMat
-wmaskpri = imgMat
+workingImgMat = deepcopy(imgMat)
+workingImgMat2 = workingImgMat
 
 N = 1000 #count of loops for Jacobi method
-for e in range(N):   
-    for i in range(0, len(reducedSubmasks)):
-        submask = reducedSubmasks[i]
-        xOff = reducedSubmasksOrigins[i][0]
-        yOff = reducedSubmasksOrigins[i][1]
+n = 0
+for i in range(0, len(reducedSubmasks)):
+    submask = reducedSubmasks[i]
+    n = 0
+    while n < N:   
         for y in range(len(submask)):
             for x in range(len(submask[y])):
                 if (IsMask(I(x, y, canvas = submask))):
-                    offX = x+xOff
-                    offY = y+yOff
-                    wmaskpri[offY,offX] = (int(wmask[offY-1,offX]) + int(wmask[offY+1,offX]) + int(wmask[offY,offX+1]) + int(wmask[offY,offX-1]))/4
-    wmaskpri, wmask = wmask, wmaskpri #reapplying the Jacobi method onto the primed system
+                    offX = x+reducedSubmasksOrigins[i][0]
+                    offY = y+reducedSubmasksOrigins[i][1]
+                    workingImgMat2[offY, offX] = (int(workingImgMat[offY-1, offX]) + int(workingImgMat[offY+1, offX]) + int(workingImgMat[offY, offX+1]) + int(workingImgMat[offY, offX-1]))/4
+        workingImgMat2, workingImgMat = workingImgMat, workingImgMat2 #reapplying the Jacobi method onto the primed system
+        n+=1
 
+#solvedImOutPath = "LOTF_GS_DEFLIED.jpg"
 solvedImOutPath = "LOTF_GS_DERECTANGLED.jpg"
-solvedIm = Image.fromarray(wmaskpri)
+solvedIm = Image.fromarray(workingImgMat2)
 solvedIm = solvedIm.convert("L")
 solvedIm.save(solvedImOutPath)
 
 imgIm.show(title = "masked") #showing masked image
 solvedIm.show(title = "solved") # showing solved image
 
-
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~ Discrepancy scoring ~~~~~~~~~~~~~~~~~~~~~~~~~ '''
 '''
     Comparing the graffiti sprayed regions to those of those regions in the original image.
 '''
+
+''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ End timer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
+finishedRunning = time.perf_counter()
+
+print("Preparation duration: " + str(startedRunningSolving - startedRunning) + " s.")
+print("Jacobi duration: " + str(finishedRunning - startedRunningSolving) + " s.")
+print("Total duration: " + str(finishedRunning - startedRunning) + " s.")
