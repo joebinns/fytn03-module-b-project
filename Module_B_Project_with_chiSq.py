@@ -15,7 +15,7 @@ oimgMat = np.array(oimgIm) # gets array of image.
 
 
 ''' ~~~~~~~~~~~~~~~~~ Import image and convert to matrix ~~~~~~~~~~~~~~~~~~ '''
-imgInPath = "LOTF_GS_RECTANGLED.jpg" # path of the image with mask applied
+imgInPath = "LOTF_GS_TEXTED.jpg" # path of the image with mask applied
 #imgInPath = "LOTF_GS_FLIED.jpg"
 imgIm = Image.open(imgInPath)
 imgIm = imgIm.convert('L') # converts image to grayscale.
@@ -23,12 +23,14 @@ imgMat = np.array(imgIm) # gets array of image.
 
 #canvasWidth, canvasHeight = imgIm.size #defines the matrix dims 
 
+
 ''' ~~~~~~~~~~~~~~~~~~ Import mask and convert to matrix ~~~~~~~~~~~~~~~~~~ '''
-maskInPath = "LOTF_GS_RECTANGLES.jpg" # path of the mask which has been applied
+maskInPath = "LOTF_GS_TEXT.jpg" # path of the mask which has been applied
 #maskInPath = "LOTF_GS_FLIES.jpg"
 maskIm = Image.open(maskInPath)
 maskIm = maskIm.convert('L') # converts mask image to grayscale.
 maskMat = np.array(maskIm) # gets array of mask image.
+
 
 ''' ~~~~~~~~~~~~~~~~~~~~~~ Break mask into submasks ~~~~~~~~~~~~~~~~~~~~~~~ '''
 # Re-purposed queue fill algorithm source: https://www.algorithm-archive.org/contents/flood_fill/flood_fill.html
@@ -190,6 +192,7 @@ for submask in submasks:
     
 #print(len(reducedSubmasks))
 
+
 ''' ~~~~~~~~~~~ Calculating the average from all the boundaries ~~~~~~~~~~~ '''
 averages = []
 for i in range(0, len(reducedSubmasks)):
@@ -208,6 +211,8 @@ for i in range(0, len(reducedSubmasks)):
         averages.append(int(averageTally/pixelsAveraged))
     else:
         averages.append(int((0+255)/2))
+
+
 
 ''' ~~~~~~~ Setting the mask regions in the image to their average ~~~~~~~~ '''  
 for i in range(0, len(reducedSubmasks)):
@@ -228,9 +233,10 @@ reducedSubmask1OutPath = "REDUCEDSUBMASK_1.jpg"
 reducedSubmasks[0] = np.array(reducedSubmasks[0])
 reducedSubmask1Im = Image.fromarray(reducedSubmasks[0])
 reducedSubmask1Im = reducedSubmask1Im.convert("L")
-reducedSubmask1Im.save(reducedSubmask1OutPath)
+# reducedSubmask1Im.show(title = "reduced submask 1") # showing masked image
+# reducedSubmask1Im.save(reducedSubmask1OutPath) # exporting masked image
 
-# reducedSubmask1Im.show(title = "reduced submask 1") #showing masked image
+
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Solving ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
 startedRunningSolving = time.perf_counter()
 
@@ -260,8 +266,6 @@ solvedIm.save(solvedImOutPath)
 
 imgIm.show(title = "masked") #showing masked image
 solvedIm.show(title = "solved") # showing solved image
-
-
 
 
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~ Discrepancy scoring ~~~~~~~~~~~~~~~~~~~~~~~~~ '''
@@ -305,8 +309,6 @@ for i in range(0, len(reducedSubmasks)):
     sigmasq = sigmasq/(subNumPix-1)            
     print('SubMask number:', i+1, '\u03C7\u00B2 =',(diffsq/subNumPix)/sigmasq)
                 
-    
-    
     
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ End timer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
 finishedRunning = time.perf_counter()
