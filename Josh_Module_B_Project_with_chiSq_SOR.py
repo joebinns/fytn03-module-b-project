@@ -77,7 +77,7 @@ imagePathChoice = imageFilePathsAll[oimagePathChoice][maskPathChoice]
 options.append("imagePathChoice: ")
 answers.append(imagePathChoice)
 
-ifRGBOptions = ["False", "True"]
+ifRGBOptions = ["True", "False"]
 ifRGB = ifRGBOptions[QuestionAndAnswer("If the image is RGB, convert it to grayscale?", ifRGBOptions)]
 if (ifRGB == "True"):
     ifRGB = True
@@ -574,10 +574,24 @@ if (useSubmask):
 else:
     for y in range(len(imgMat)):
         for x in range(len(imgMat[y])):
-            if solvedImgMat[y][x] > 254:
-                solvedImgMat[y][x] = 254
-            elif solvedImgMat[y][x] < 1:
-                solvedImgMat[y][x] = 0
+            if RGB == True:
+                if solvedImgMatRed[offY][offX] > 254:
+                    solvedImgMatRed[offY][offX] = 254
+                elif solvedImgMatRed[offY][offX] < 1:
+                    solvedImgMatRed[offY][offX] = 0  
+                elif solvedImgMatGreen[offY][offX] > 254:
+                    solvedImgMatGreen[offY][offX] = 254
+                elif solvedImgMatGreen[offY][offX] < 1:
+                    solvedImgMatGreen[offY][offX] = 0  
+                elif solvedImgMatBlue[offY][offX] > 254:
+                    solvedImgMatBlue[offY][offX] = 254
+                elif solvedImgMatBlue[offY][offX] < 1:
+                    solvedImgMatBlue[offY][offX] = 0  
+            else:
+                if solvedImgMat[offY][offX] > 254:
+                    solvedImgMat[offY][offX] = 254
+                elif solvedImgMat[offY][offX] < 1:
+                    solvedImgMat[offY][offX] = 0  
 
 
 ''' # Some debugging stuff
