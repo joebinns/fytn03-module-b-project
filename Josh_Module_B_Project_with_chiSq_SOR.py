@@ -3,10 +3,6 @@ import numpy as np
 import time
 from copy import deepcopy
 
-''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Initiate timer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
-startedRunning = time.perf_counter()
-
-
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~ User decisions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
 # Select the image and mask from available options.
 # Automatically determine the masked image from this information.
@@ -40,7 +36,7 @@ options = []
 answers = []
 
 # Choose oimage!
-oimageFilePaths = ["LOTF_GS.jpg", "LOTF_RGB.jpg"]
+oimageFilePaths = ["LOTF_GS.png", "LOTF_RGB.png"]
 oimagePathChoice = oimageFilePaths[QuestionAndAnswer("Select the file path of the original image.", oimageFilePaths)]
 print()
 options.append("oimagePathChoice: ")
@@ -48,8 +44,8 @@ answers.append(oimagePathChoice)
 
 # Choose mask (and therefore also the masked image)
 maskFilePathsAll = {
-        "LOTF_GS.jpg": ["LOTF_GS_RECTANGLES.jpg", "LOTF_GS_FLIES.jpg", "LOTF_GS_BIGFLIES.jpg", "LOTF_GS_TEXT.jpg"],
-        "LOTF_RGB.jpg": ["LOTF_RGB_RECTANGLES.jpg", "LOTF_RGB_FLIES.jpg", "LOTF_RGB_BIGFLIES.jpg", "LOTF_RGB_TEXT.jpg"]
+        "LOTF_GS.png": ["LOTF_GS_RECTANGLES.png", "LOTF_GS_FLIES.png", "LOTF_GS_BIGFLIES.png", "LOTF_GS_TEXT.png"],
+        "LOTF_RGB.png": ["LOTF_RGB_RECTANGLES.png", "LOTF_RGB_FLIES.png", "LOTF_RGB_BIGFLIES.png", "LOTF_RGB_TEXT.png"]
         }
 maskFilePaths = maskFilePathsAll[oimagePathChoice]
 maskPathChoice = maskFilePaths[QuestionAndAnswer("Select the file path of the mask.", maskFilePaths)]
@@ -59,25 +55,25 @@ answers.append(maskPathChoice)
 
 # Automatically determine the masked version of the image.
 imageFilePathsGS = {
-        "LOTF_GS_RECTANGLES.jpg": "LOTF_GS_RECTANGLED.jpg",
-        "LOTF_GS_FLIES.jpg": "LOTF_GS_FLIED.jpg",
-        "LOTF_GS_BIGFLIES.jpg": "LOTF_GS_BIGFLIED.jpg",
-        "LOTF_GS_TEXT.jpg": "LOTF_GS_TEXTED.jpg"
+        "LOTF_GS_RECTANGLES.png": "LOTF_GS_RECTANGLED.png",
+        "LOTF_GS_FLIES.png": "LOTF_GS_FLIED.png",
+        "LOTF_GS_BIGFLIES.png": "LOTF_GS_BIGFLIED.png",
+        "LOTF_GS_TEXT.png": "LOTF_GS_TEXTED.png"
         }
 imageFilePathsRGB = {
-        "LOTF_RGB_RECTANGLES.jpg": "LOTF_RGB_RECTANGLED.jpg",
-        "LOTF_RGB_FLIES.jpg": "LOTF_RGB_FLIED.jpg",
-        "LOTF_RGB_BIGFLIES.jpg": "LOTF_RGB_BIGFLIED.jpg",
-        "LOTF_RGB_TEXT.jpg": "LOTF_RGB_TEXTED.jpg"
+        "LOTF_RGB_RECTANGLES.png": "LOTF_RGB_RECTANGLED.png",
+        "LOTF_RGB_FLIES.png": "LOTF_RGB_FLIED.png",
+        "LOTF_RGB_BIGFLIES.png": "LOTF_RGB_BIGFLIED.png",
+        "LOTF_RGB_TEXT.png": "LOTF_RGB_TEXTED.png"
         }
 imageFilePathsAll = {
-        "LOTF_GS.jpg": imageFilePathsGS,
-        "LOTF_RGB.jpg": imageFilePathsRGB
+        "LOTF_GS.png": imageFilePathsGS,
+        "LOTF_RGB.png": imageFilePathsRGB
         }
 
 imagePathChoice = imageFilePathsAll[oimagePathChoice][maskPathChoice]
 options.append("imagePathChoice: ")
-answers.append(maskPathChoice)
+answers.append(imagePathChoice)
 
 isAveragingOptions = ["False", "True"]
 isAveraging = isAveragingOptions[QuestionAndAnswer("Apply colour-averaging to the mask using it's surroundings, prior to applying the solving method?", isAveragingOptions)]
@@ -121,6 +117,9 @@ for i in range(0, len(options)):
     print(str(options[i]) + str(answers[i]))
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 print()
+
+''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Initiate timer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
+startedRunning = time.perf_counter()
 
 
 ''' ~~~~~~~~~~~~~~~~~ Import original image and convert to matrix ~~~~~~~~~~~~~~~~~~ '''
@@ -201,11 +200,11 @@ def IsMask(i):
         isMask {bool}: wether or not the pixel intensity qualifies as a mask or not (i.e. 0 is a mask, 255 is not).
     '''
     isMask = False
-    if (i < 255 * 0.9): # i == 1 is a temporary fix. For some unknown reason, the imported mask matrix has values of 0 and 1 (on a scale of [0, 255]) for the black, whereas we expect only 0. 
+    if (i < 255 * 0.99): # i == 1 is a temporary fix. For some unknown reason, the imported mask matrix has values of 0 and 1 (on a scale of [0, 255]) for the black, whereas we expect only 0. 
         isMask = True
     return isMask
 
-def FindNeighbours(canvas, submasks, p, allowDiagonalNeighbours = True):
+def FindNeighbours(canvas, submasks, workingMask, p, allowDiagonalNeighbours = True):
     '''   
     Input(s):
         canvas {nested array}: The matrix of the mask. 
@@ -237,12 +236,14 @@ def FindNeighbours(canvas, submasks, p, allowDiagonalNeighbours = True):
     neighbours = []
     for possibleNeighbour in possibleNeighbours:    
         if WithinBounds(canvas, possibleNeighbour):
-            if (AlreadySubmasked(submasks, possibleNeighbour) == False):
+            #if (AlreadySubmasked(submasks, possibleNeighbour) == False):
+            if (AlreadySubmasked([workingMask], possibleNeighbour) == False):
                 if IsMask(I(possibleNeighbour[0], possibleNeighbour[1], canvas = canvas)):
-                    neighbours.append(possibleNeighbour)                   
+                    neighbours.append(possibleNeighbour)
+                    workingMask[possibleNeighbour[1]][possibleNeighbour[0]] = 1
     return neighbours
 
-def QueueFill(canvas, submasks, p):
+def QueueFill(canvas, submasks, workingMask, p):
     '''
     Input(s):
         canvas {nested array}: The matrix of the mask. 
@@ -261,7 +262,7 @@ def QueueFill(canvas, submasks, p):
 
     while not q.empty(): # While there remains neighbouring cells.
         currentLoc = q.get()
-        neighbours = FindNeighbours(canvas, submasks, currentLoc, allowDiagonalNeighbours = True)
+        neighbours = FindNeighbours(canvas, submasks, workingMask, currentLoc, allowDiagonalNeighbours = True)
         for neighbour in neighbours:
             submask[neighbour[1]][neighbour[0]] = 0
             q.put(neighbour)
@@ -270,11 +271,13 @@ def QueueFill(canvas, submasks, p):
 
 # Traverse through the mask matrix row-by-row, applying the 'detection-fill' algorithm to pixels which qualify as having the intensity of a mask, and have not already been included in a previous fill.
 submasks = []
+workingMask = np.full((len(imgMat), len(imgMat[0])), 255, dtype = int)
 for y in range(0, len(imgMat)):
     for x in range(0, len(imgMat[0])):
         if (IsMask(I(x, y, canvas = maskMat))):
-            if (AlreadySubmasked(submasks, [x, y]) == False):
-                submasks = QueueFill(maskMat, submasks, [x, y])
+            #if (AlreadySubmasked(submasks, [x, y]) == False):
+            if (AlreadySubmasked([workingMask], [x, y]) == False):
+                submasks = QueueFill(maskMat, submasks, workingMask, [x, y])
 
 # Traverse through the completed submasks, create new reduced submasks bounded by a rectangle surrounding all the mask pixels. 
 def ReduceSubmasks(canvas, submasks, isAveraging):
@@ -324,6 +327,7 @@ for submask in reducedSubmasks:
     print()
 '''   
 
+
 ''' ~~~~~~~~~~~ Calculating the average from all the boundaries ~~~~~~~~~~~ '''
 def CalculateAveraging():
     averages = []
@@ -343,6 +347,7 @@ def CalculateAveraging():
                     else:
                         averages.append(int((0+255)/2))
     return(averages)
+
 
 ''' ~~~~~~~ Setting the mask regions in the image to their average ~~~~~~~~ '''  
 def ApplyAveraging(averages):
@@ -369,12 +374,11 @@ def DisplayOrSaveReducedSubmasks(shouldSave):
         if (shouldSave == False):
             reducedSubmaskIm.show()
         if (shouldSave):
-            reducedSubmaskOutPath = "REDUCEDSUBMASK_"+str(i)+".jpg"
+            reducedSubmaskOutPath = "REDUCEDSUBMASK_"+str(i)+".png"
             reducedSubmaskIm.save(reducedSubmaskOutPath)
         i+=1
 
 #DisplayOrSaveReducedSubmasks(True)
-
 
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Solving ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
 startedRunningSolving = time.perf_counter()
@@ -401,7 +405,8 @@ def SOR(workingImgMat, omega = 1, N = 200):
                         workingImgMat2[offY][offX] = (1-omega) * (workingImgMat[offY][offX])\
                                                         + (omega/4) * (workingImgMat[offY-1][offX] + workingImgMat[offY+1][offX]\
                                                             + workingImgMat[offY][offX+1] + workingImgMat[offY][offX-1])       
-            workingImgMat = deepcopy(workingImgMat2) # Reapplying the Jacobi method onto the primed system
+            workingImgMat = workingImgMat2
+            #workingImgMat = deepcopy(workingImgMat2) # Reapplying the Jacobi method onto the primed system
             n+=1
     return(workingImgMat)
 
@@ -420,6 +425,7 @@ for i in range(0, len(reducedSubmasks)):
             elif solvedImgMat[offY][offX] < 1:
                 solvedImgMat[offY][offX] = 0  
 
+
 ''' # Some debugging stuff
 outInt = np.zeros((len(reducedSubmasks[0]),len(reducedSubmasks[0][0])))
 for i in range(0, len(reducedSubmasks[0])):
@@ -435,7 +441,7 @@ for i in range(len(outInt)):
         
 solvedImgMat = np.array(solvedImgMat, dtype = np.int8) 
 
-solvedImOutPath = "SOLVED_IMAGE.jpg"
+solvedImOutPath = "SOLVED_IMAGE.png"
 solvedIm = Image.fromarray(solvedImgMat)
 solvedIm = solvedIm.convert("L")
 solvedIm.save(solvedImOutPath)
@@ -499,4 +505,3 @@ print("Discrepancy duration: " + str(finishedRunning - startedRunningDiscrepancy
 print("Total duration: " + str(finishedRunning - startedRunning) + " s.")
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 print()
-
