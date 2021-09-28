@@ -23,7 +23,6 @@ imgMat = np.array(imgIm) # gets array of image.
 
 #canvasWidth, canvasHeight = imgIm.size #defines the matrix dims 
 
-
 ''' ~~~~~~~~~~~~~~~~~~ Import mask and convert to matrix ~~~~~~~~~~~~~~~~~~ '''
 maskInPath = "LOTF_GS_TEXT.jpg" # path of the mask which has been applied
 #maskInPath = "LOTF_GS_FLIES.jpg"
@@ -305,9 +304,11 @@ for i in range(0, len(reducedSubmasks)):
             diffsq = diffsq + ((int(I(offX, offY, canvas = solvedImMat))-int(I(offX, offY, canvas = oimgMat)))**2)
             sigmasq = sigmasq + int((I(offX, offY, canvas = oimgMat) - Imean)**2)
                         
-                                 
-    sigmasq = sigmasq/(subNumPix-1)            
-    print('SubMask number:', i+1, '\u03C7\u00B2 =',(diffsq/subNumPix)/sigmasq)
+    try:                             
+        sigmasq = sigmasq/(subNumPix-1)            
+        print('SubMask number:', i+1, '\u03C7\u00B2 =',(diffsq/subNumPix)/sigmasq)
+    except:
+        print('SubMask number:', i+1, '\u03C7\u00B2 =',"NaN. DIVISION BY ZERO.")
                 
     
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ End timer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
