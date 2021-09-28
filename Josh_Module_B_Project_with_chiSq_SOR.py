@@ -12,16 +12,16 @@ startedRunning = time.perf_counter()
 # Automatically determine the masked image from this information.
 # Choose if to apply averaging.
 
-def ValidatedInput(inputQueue, answerRange):
+def ValidatedInput(inputQueue, answerRange, dtype = int):
     while True: # Check that the input is a number, and then check that the number is within the desired range for answers.
         try:
-            theInput = int(input(inputQueue))
+            theInput = dtype(input(inputQueue))
             while True: # Check that the input, which has already been established to be a number, is within the desired range for answers.
                 if (theInput >= answerRange[0] and theInput <= answerRange[1]):
                     break # Escape the while loop if the input is within the range.
                 else:
                     print("Input was not within the range of the options. Please re-enter.")
-                    theInput = int(input(inputQueue))                    
+                    theInput = dtype(input(inputQueue))                    
             break # Escape the while loop if the input is interpreted as a NUMBER within the RANGE.               
         except:
             print("Input could not be interpreted as a number. Please re-enter. HELP: Type the desired number ONLY and press enter.")
@@ -36,11 +36,15 @@ def QuestionAndAnswer(question, options):
 
 
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ User Decisions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+options = []
+answers = []
 
 # Choose oimage!
 oimageFilePaths = ["LOTF_GS.jpg", "LOTF_RGB.jpg"]
 oimagePathChoice = oimageFilePaths[QuestionAndAnswer("Select the file path of the original image.", oimageFilePaths)]
 print()
+options.append("oimagePathChoice: ")
+answers.append(oimagePathChoice)
 
 # Choose mask (and therefore also the masked image)
 maskFilePathsAll = {
@@ -50,6 +54,8 @@ maskFilePathsAll = {
 maskFilePaths = maskFilePathsAll[oimagePathChoice]
 maskPathChoice = maskFilePaths[QuestionAndAnswer("Select the file path of the mask.", maskFilePaths)]
 print()
+options.append("maskPathChoice: ")
+answers.append(maskPathChoice)
 
 # Automatically determine the masked version of the image.
 imageFilePathsGS = {
@@ -70,44 +76,49 @@ imageFilePathsAll = {
         }
 
 imagePathChoice = imageFilePathsAll[oimagePathChoice][maskPathChoice]
-print()
+options.append("imagePathChoice: ")
+answers.append(maskPathChoice)
 
-isAveragingOptions = ["True", "False"]
+isAveragingOptions = ["False", "True"]
 isAveraging = isAveragingOptions[QuestionAndAnswer("Apply colour-averaging to the mask using it's surroundings, prior to applying the solving method?", isAveragingOptions)]
 if (isAveraging == "True"):
     isAveraging = True
 else:
     isAveraging = False
-
-""" WORK IN PROGRESS
+options.append("isAveraging: ")
+answers.append(str(isAveraging))
+print()
+    
 # Choose solver!
 solvers = ["SOR"]
 solverChoice = solvers[QuestionAndAnswer("Select the solver to be used!", solvers)]
-print()
+options.append("solverChoice: ")
+answers.append(solverChoice)
 
-SOROptions = {"Number of iterations (N):": [1,200],
-              "Relaxation (omega):": [0.01, 1.99]
+NMutable = []
+omegaMutable = []
+SOROptions = {"Number of iterations (N) [1, 200]: ": [[1, 200], NMutable, int],
+              "Relaxation (\u03C9) [0.01, 1.99]: ": [[0.01, 1.99], omegaMutable, float]
               }
 solversAll = {
         "SOR": SOROptions
         }
-
 for key in solversAll[solverChoice]:
-    allowedRange = solversAll[solverChoice][key]
-    
-    QuestionAndAnswer()
-"""    
+    allowedRange = solversAll[solverChoice][key][0]
+    var = solversAll[solverChoice][key][1]
+    dtype = solversAll[solverChoice][key][2]
+    var.append(ValidatedInput(key, allowedRange, dtype = dtype))
+    options.append(key)
+    answers.append(var[0])
+N = NMutable[0]
+omega = omegaMutable[0]
 
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 print()
 
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ User Choices ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
-print("oimagePathChoice:", oimagePathChoice)
-print("imagePathChoice:", imagePathChoice)
-print("maskPathChoice:", maskPathChoice)
-print()
-print("isAveraging:", str(isAveraging))
-#print("solverChoice:", solverChoice) WORK IN PROGRESS
+for i in range(0, len(options)):
+    print(str(options[i]) + str(answers[i]))
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 print()
 
@@ -377,7 +388,6 @@ def SOR(workingImgMat, omega = 1, N = 200):
     workingImgMat = np.array(workingImgMat, dtype = np.int16)
     workingImgMat2 = deepcopy(workingImgMat)
     workingImgMat2 = np.array(workingImgMat2, dtype = np.int16)
-    N =  200 # 1000 #count of loops for Jacobi method
     n = 0
     for i in range(0, len(reducedSubmasks)):
         submask = reducedSubmasks[i]
@@ -396,7 +406,7 @@ def SOR(workingImgMat, omega = 1, N = 200):
     return(workingImgMat)
 
 if (solverChoice == "SOR"):
-    solvedImgMat = SOR(workingImgMat, omega = 1, N = 200)
+    solvedImgMat = SOR(workingImgMat, omega = omega, N = N)
 
 # Manually converting the image back to take values between [0, 254].
 for i in range(0, len(reducedSubmasks)):
@@ -438,7 +448,6 @@ solvedIm.show(title = "solved") # showing solved image
 '''
     Comparing the graffiti sprayed regions to those of those regions in the original image.
 '''
-
 startedRunningDiscrepancy = time.perf_counter()
 
 def CalculateDiscrepancyScore():
@@ -467,7 +476,7 @@ def CalculateDiscrepancyScore():
                 for x in range(len(submask[y])):
                     offX = x+xOff
                     offY = y+yOff            
-                    diffsq = diffsq + ((int(I(offX, offY, canvas = solvedImMat))-int(I(offX, offY, canvas = oimgMat)))**2)
+                    diffsq = diffsq + ((int(I(offX, offY, canvas = solvedImgMat))-int(I(offX, offY, canvas = oimgMat)))**2)
                     sigmasq = sigmasq + int((I(offX, offY, canvas = oimgMat) - Imean)**2)                                
             if subNumPix > 0 and sigmasq > 0:                           
                 sigmasq = sigmasq/(subNumPix-1)            
