@@ -398,7 +398,7 @@ def SOR(workingImgMat, omega = 1, N = 200):
                     if (IsMask(I(x, y, canvas = submask))):
                         offX = x+reducedSubmasksOrigins[i][0]
                         offY = y+reducedSubmasksOrigins[i][1]
-                        workingImgMat2[offY][offX] = workingImgMat2[offY][offX] = (1-omega) * (workingImgMat[offY][offX])\
+                        workingImgMat2[offY][offX] = (1-omega) * (workingImgMat[offY][offX])\
                                                         + (omega/4) * (workingImgMat[offY-1][offX] + workingImgMat[offY+1][offX]\
                                                             + workingImgMat[offY][offX+1] + workingImgMat[offY][offX-1])       
             workingImgMat = deepcopy(workingImgMat2) # Reapplying the Jacobi method onto the primed system
