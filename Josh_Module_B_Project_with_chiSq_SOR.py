@@ -9,6 +9,14 @@ from copy import deepcopy
 # Choose if to apply averaging.
 
 def ValidatedInput(inputQueue, answerRange, dtype = int):
+    '''
+    Input(s):
+        inputQueue {str}: The text for the question.
+        answerRange {length-2 array}: The range of numbers of acceptable values.
+        dtype {type}: The expected data-type.
+    Output(s):
+        theInput {dtype}: Validated input.
+    '''
     while True: # Check that the input is a number, and then check that the number is within the desired range for answers.
         try:
             theInput = dtype(input(inputQueue))
@@ -24,6 +32,13 @@ def ValidatedInput(inputQueue, answerRange, dtype = int):
     return theInput
 
 def QuestionAndAnswer(question, options):
+    '''
+    Input(s):
+        question {str}: The text for the question.
+        options {array}: The list of available options.
+    Output(s):
+        choice {int}: The zeroed index of the chosen option.
+    '''
     print(question)
     for i in range(0, len(options)):
         print(str(i+1) + ": " + options[i]) 
@@ -143,8 +158,8 @@ def RGB_decomp(RGB_canvas):
         img {array}: full image, with all three colour pixels.
     Output(s):
         red_canvas {array}: array of the intensities of the red pixel, taking values [0, 255] corresponding to [black, red].
-        green_canvas {array}: array of the intensities of the red pixel, taking values [0, 255] corresponding to [black, red].
-        blue_canvas {array}: array of the intensities of the red pixel, taking values [0, 255] corresponding to [black, red].
+        green_canvas {array}: array of the intensities of the green pixel, taking values [0, 255] corresponding to [black, green].
+        blue_canvas {array}: array of the intensities of the blue pixel, taking values [0, 255] corresponding to [black, blue].
     '''
     red_canvas = RGB_canvas[:,:,0]
     green_canvas = RGB_canvas[:,:,1]
@@ -335,6 +350,15 @@ def QueueFill(canvas, submasks, workingMask, p):
 
 # Traverse through the completed submasks, create new reduced submasks bounded by a rectangle surrounding all the mask pixels. 
 def ReduceSubmasks(canvas, submasks, isAveraging):
+    '''
+    Input(s):
+        canvas {nested array}: The matrix of the image.
+        submasks {array of nested arrays}: List of all the submasks matrices. 
+        isAveraging {bool}: Wether or not color-averaging is to be applied to the mask.
+    Output(s):
+        reducedSubmasks {array of nested arrays}: List of all the reduced submasks matrices. 
+        reducedSubmasksOrigins {array of length-2 arrays}: List of all the origins of the reduced submasks.
+    '''
     reducedSubmasks = []
     reducedSubmasksOrigins = []
     for submask in submasks:
@@ -396,6 +420,11 @@ if (useSubmask):
 
 ''' ~~~~~~~~~~~ Calculating the average from all the boundaries ~~~~~~~~~~~ '''
 def CalculateAverages():
+    '''
+    Input(s):
+    Output(s):
+        averages {array of ints}: List of the averages of the reducedSubmasks.
+    '''
     averages = []
     averagesRed = []
     averagesGreen = []
