@@ -2,12 +2,9 @@ from PIL import Image
 import numpy as np
 import time
 from copy import deepcopy
+from queue import Queue
 
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~ User decisions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
-# Select the image and mask from available options.
-# Automatically determine the masked image from this information.
-# Choose if to apply averaging.
-
 def ValidatedInput(inputQueue, answerRange, dtype = int):
     '''
     Input(s):
@@ -45,14 +42,11 @@ def QuestionAndAnswer(question, options):
     choice = ValidatedInput("Make your selection: ", [1, len(options)]) - 1
     return(choice)
 
-
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ User Decisions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 options = []
 answers = []
 
-
-
-# Choose oimage!
+# Choose original (clean) image
 oimageFilePaths = ["LOTF_GS.png", "LOTF_RGB.png"]
 oimagePathChoice = oimageFilePaths[QuestionAndAnswer("Select the file path of the original image.", oimageFilePaths)]
 print()
@@ -62,7 +56,7 @@ answers.append(oimagePathChoice)
 # Choose mask (and therefore also the masked image)
 maskFilePathsAll = {
         "LOTF_GS.png": ["LOTF_GS_RECTANGLES.png", "LOTF_GS_FLIES.png", "LOTF_GS_BIGFLIES.png", "LOTF_GS_TEXT.png"],
-        "LOTF_RGB.png": ["LOTF_RGB_RECTANGLES.png", "LOTF_RGB_FLIES.png", "LOTF_RGB_BIGFLIES.png", "LOTF_RGB_TEXT.png"]
+        "LOTF_RGB.png": ["LOTF_RGB_RECTANGLES.png", "LOTF_RGB_FLIES.png", "LOTF_RGB_BIGFLIES.png", "LOTF_RGB_TEXT.png", "LOTF_RGB_GETTY.png"]
         }
 maskFilePaths = maskFilePathsAll[oimagePathChoice]
 maskPathChoice = maskFilePaths[QuestionAndAnswer("Select the file path of the mask.", maskFilePaths)]
@@ -81,7 +75,8 @@ imageFilePathsRGB = {
         "LOTF_RGB_RECTANGLES.png": "LOTF_RGB_RECTANGLED.png",
         "LOTF_RGB_FLIES.png": "LOTF_RGB_FLIED.png",
         "LOTF_RGB_BIGFLIES.png": "LOTF_RGB_BIGFLIED.png",
-        "LOTF_RGB_TEXT.png": "LOTF_RGB_TEXTED.png"
+        "LOTF_RGB_TEXT.png": "LOTF_RGB_TEXTED.png",
+        "LOTF_RGB_GETTY.png": "LOTF_RGB_GETTYED.png"
         }
 imageFilePathsAll = {
         "LOTF_GS.png": imageFilePathsGS,
@@ -103,7 +98,7 @@ answers.append(str(ifRGB))
 print()
     
 # Choose solver!
-solvers = ["SOR"]
+solvers = ["Jacobi / SOR", "Gauss-Seidel"]
 solverChoice = solvers[QuestionAndAnswer("Select the solver to be used!", solvers)]
 options.append("solverChoice: ")
 answers.append(solverChoice)
@@ -113,33 +108,38 @@ omega = 1.0
 useSubmask = False
 isAveraging = False
 
-if (solverChoice == "SOR"):
-    N = ValidatedInput("Number of iterations (N) [1, 200]: ", [1, 200], dtype = int)
-    options.append("N: ")
-    answers.append(N)
-    
-    omega = ValidatedInput("Relaxation (\u03C9) [0.01, 1.99]: ", [0.01, 1.99], dtype = float)
+N = 50
+omega = 1.0
+useSubmask = False
+isAveraging = False
+
+N = ValidatedInput("Number of iterations (N) [1, 200]: ", [1, 200], dtype = int)
+options.append("N: ")
+answers.append(N)
+
+if (solverChoice == "Jacobi / SOR"):
+    omega = ValidatedInput("Relaxation (\u03C9) [0.01, 1.99] (1 corresponds to Jacobi): ", [0.01, 1.99], dtype = float)
     options.append("\u03C9: ")
     answers.append(omega)
     
-    useSubmaskOptions = ["True", "False"]
-    useSubmask = useSubmaskOptions[QuestionAndAnswer("Use submasks?", useSubmaskOptions)]
-    if (useSubmask == "True"):
-        useSubmask = True
-    else:
-        useSubmask = False
-    options.append("useSubmask: ")
-    answers.append(str(useSubmask))
+useSubmaskOptions = ["True", "False"]
+useSubmask = useSubmaskOptions[QuestionAndAnswer("Use submasks?", useSubmaskOptions)]
+if (useSubmask == "True"):
+    useSubmask = True
+else:
+    useSubmask = False
+options.append("useSubmask: ")
+answers.append(str(useSubmask))
     
-    if(useSubmask):
-        isAveragingOptions = ["True", "False"]
-        isAveraging = isAveragingOptions[QuestionAndAnswer("Apply colour-averaging to the mask using it's surroundings, prior to applying the solving method?", isAveragingOptions)]
-        if (isAveraging == "True"):
-            isAveraging = True
-        else:
-            isAveraging = False
-        options.append("isAveraging: ")
-        answers.append(str(isAveraging))
+if(useSubmask):
+    isAveragingOptions = ["True", "False"]
+    isAveraging = isAveragingOptions[QuestionAndAnswer("Apply colour-averaging to the mask using it's surroundings, prior to applying the solving method?", isAveragingOptions)]
+    if (isAveraging == "True"):
+        isAveraging = True
+    else:
+        isAveraging = False
+    options.append("isAveraging: ")
+    answers.append(str(isAveraging))
 
 print()
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ User Choices ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
@@ -147,11 +147,12 @@ for i in range(0, len(options)):
     option = options[i].splitlines()[0]
     print(str(options[i]) + str(answers[i]))
 
+
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~ Initiate timer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
 startedRunning = time.perf_counter()
 
 
-''' ~~~~~~~~~~~~~~~~~~~~~~~~ RGB decomposition of image ~~~~~~~~~~~~~~~~~~~~~~~~~ '''
+''' ~~~~~~~~~~~~~~~~~~~~~ RGB decomposition of image ~~~~~~~~~~~~~~~~~~~~~~ '''
 def RGB_decomp(RGB_canvas):
     '''
     Input(s):
@@ -166,7 +167,8 @@ def RGB_decomp(RGB_canvas):
     blue_canvas = RGB_canvas[:,:,2]
     return np.array(red_canvas, dtype = np.int16), np.array(green_canvas, dtype = np.int16), np.array(blue_canvas, dtype = np.int16)
 
-''' ~~~~~~~~~~~~~~~~~~~~~ Check if greyscale ~~~~~~~~~~~~~~~~~~~~ '''
+
+''' ~~~~~~~~~~~~~~~~~~~~~~~~~~ Check if greyscale ~~~~~~~~~~~~~~~~~~~~~~~~~ '''
 '''
     Since an image that appears to be grayscale may actually be storing some
     colour values (i.e. a digital colour photograph taken of a greyscale image
@@ -176,6 +178,12 @@ def RGB_decomp(RGB_canvas):
 '''
 
 def IsGreyScale(img_path): # Source: https://stackoverflow.com/a/23661373
+    '''
+    Input(s):
+        img_path {str}: Path of the source image to check if it is greyscale.
+    Output(s):
+        {bool}: Wether or not the image is greyscale.
+    '''
     img = Image.open(img_path).convert('RGB')
     w, h = img.size
     for i in range(w):
@@ -185,7 +193,7 @@ def IsGreyScale(img_path): # Source: https://stackoverflow.com/a/23661373
                 return False
     return True
 
-''' ~~~~~~~~~~~~~~~~~ Import original image and convert to matrix ~~~~~~~~~~~~~~~~~~ '''
+''' ~~~~~~~~~~~~ Import original image and convert to matrix ~~~~~~~~~~~~~~ '''
 oimgInPath = oimagePathChoice # path of the original, unmasked image.
 oimgIm = Image.open(oimgInPath) # open image
 
@@ -202,7 +210,9 @@ else:
 ''' ~~~~~~~~~~~~~~~~~ Import image and convert to matrix ~~~~~~~~~~~~~~~~~~ '''
 imgInPath = imagePathChoice # path of the image with mask applied.
 imgIm = Image.open(imgInPath)
-cpimgIm = Image.open(imgInPath)
+cpimgIm = Image.open(imgInPath) # copy of original image, to display later
+if ifRGB == True: # If conversion to grayscale is true, convert the original image as well for later comparison
+    cpimgIm.convert('L')
 
 # if soving in RGB
 if RGB == True:
@@ -213,8 +223,6 @@ if RGB == True:
 imgIm = imgIm.convert('L') # converts image to grayscale.
 imgMat = np.array(imgIm, dtype = np.int16) # gets array of image.
 
-#canvasWidth, canvasHeight = imgIm.size #defines the matrix dims 
-
 
 ''' ~~~~~~~~~~~~~~~~~~ Import mask and convert to matrix ~~~~~~~~~~~~~~~~~~ '''
 maskInPath = maskPathChoice # path of the mask which has been applied.
@@ -222,15 +230,16 @@ maskIm = Image.open(maskInPath)
 maskIm = maskIm.convert('L') # converts mask image to grayscale.
 maskMat = np.array(maskIm, dtype = np.int16) # gets array of mask image.
 
-''' ~~~~~~~~~~~~~~~~~~~~~~ Break mask into submasks ~~~~~~~~~~~~~~~~~~~~~~~ '''
-# Re-purposed queue fill algorithm source: https://www.algorithm-archive.org/contents/flood_fill/flood_fill.html
-from queue import Queue
 
-# Rough procedure:
-# 1: Searching row by row for non-1 intensity.
-# 2: When found,  create a sub-mask matrix (the size of the canvas).
-# 3: Apply fill to the point, adding appropriate point to the sub-mask when enqueued.
-# 4: Continue scanning the grid, only applying fill if the point isn't already included in any sub-mask.
+''' ~~~~~~~~~~~~~~~~~~~~~~ Break mask into submasks ~~~~~~~~~~~~~~~~~~~~~~~ '''
+'''
+    Rough procedure:
+    1: Searching row by row for non-1 intensity.
+    2: When found,  create a sub-mask matrix (the size of the canvas).
+    3: Apply fill to the point, adding appropriate point to the sub-mask when enqueued.
+    4: Continue scanning the grid, only applying fill if the point isn't already included in any sub-mask.
+'''
+# Re-purposed queue fill algorithm source: https://www.algorithm-archive.org/contents/flood_fill/flood_fill.html
 
 def I(x, y, canvas = imgMat):
     '''
@@ -332,21 +341,16 @@ def QueueFill(canvas, submasks, workingMask, p):
     '''
     submask = np.full((len(canvas), len(canvas[0])), 255, dtype = int)
     submasks.append(submask)
-
     q = Queue()
-    
     submask[p[1]][p[0]] = 0 # Setting the value of the start position to the new value.
     q.put(p) # Adding the start position to the queue.
-
     while not q.empty(): # While there remains neighbouring cells.
         currentLoc = q.get()
         neighbours = FindNeighbours(canvas, submasks, workingMask, currentLoc, allowDiagonalNeighbours = True)
         for neighbour in neighbours:
             submask[neighbour[1]][neighbour[0]] = 0
-            q.put(neighbour)
-            
+            q.put(neighbour)      
     return(submasks)
-
 
 # Traverse through the completed submasks, create new reduced submasks bounded by a rectangle surrounding all the mask pixels. 
 def ReduceSubmasks(canvas, submasks, isAveraging):
@@ -394,7 +398,6 @@ def ReduceSubmasks(canvas, submasks, isAveraging):
         reducedSubmasks.append(reducedSubmask)
         reducedSubmasksOrigins.append([minX, minY])
     return(reducedSubmasks, reducedSubmasksOrigins)
-
 
 if (useSubmask):
     # Traverse through the mask matrix row-by-row, applying the 'detection-fill' algorithm to pixels which qualify as having the intensity of a mask, and have not already been included in a previous fill.
@@ -471,6 +474,11 @@ def CalculateAverages():
 
 ''' ~~~~~~~ Setting the mask regions in the image to their average ~~~~~~~~ '''  
 def ApplyAveraging(averages):
+    '''
+    Input(s):
+        averages {array of ints}: List of the averages of the reducedSubmasks.
+    Output(s):
+    '''
     for i in range(0, len(reducedSubmasks)):
         submask = reducedSubmasks[i]  
         for y in range(len(submask)):
@@ -487,6 +495,11 @@ def ApplyAveraging(averages):
 
 # Displaying (or save) the reducedSubmasks.
 def DisplayOrSaveReducedSubmasks(shouldSave):
+    '''
+    Input(s):
+        shouldSave {bool}: Wether or not to save images of the generated submasks for inspection, otherwise displays them.
+    Output(s):
+    '''
     i = 0
     for i in range(0, len(reducedSubmasks)):
         reducedSubmasks[i] = np.array(reducedSubmasks[i])
@@ -502,19 +515,15 @@ def DisplayOrSaveReducedSubmasks(shouldSave):
 if (useSubmask):
     if (isAveraging):
         averages = CalculateAverages()
-        ApplyAveraging(averages)
-        
-        # test averaging
-        '''
+        ApplyAveraging(averages)   
+        ''' DEBUGGING:
         if RGB == True:
             testIm = Image.fromarray(BlueImgMat.astype(np.uint8))
             testImOutPath = "TEST_IMAGE.jpg"
             testIm.save(testImOutPath)
             testIm.show(title = "test") # showing solved image
         '''
-
     #DisplayOrSaveReducedSubmasks(True)
-
 
 
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Solving ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
@@ -529,8 +538,12 @@ else:
 
 def SOR(workingImgMat, useSubmask, omega = 1, N = 200):
     '''
-        SOR method for grayscale image;
-        omega = 1 corresponds to Jacobi.
+    Input(s):
+        workingImgMat {nested array}: A copy of the imgMat to be solved.
+        useSubmask {bool}: Wether or not submasks have been used.
+        omega {float}: 1 corresponds to Jacobi method, >1 is overrelaxation and <1 underrelaxation.
+    Output(s):
+        workingImgMat {nested array}: The solved imgMat.
     '''
     workingImgMat = np.array(workingImgMat, dtype = np.int16)
     workingImgMat2 = deepcopy(workingImgMat)
@@ -545,9 +558,14 @@ def SOR(workingImgMat, useSubmask, omega = 1, N = 200):
                         if (IsMask(I(x, y, canvas = submask))):
                             offX = x+reducedSubmasksOrigins[i][0]
                             offY = y+reducedSubmasksOrigins[i][1]
-                            workingImgMat2[offY][offX] = (1-omega) * (workingImgMat[offY][offX])\
+                            if (solverChoice == "Jacobi / SOR"):
+                                workingImgMat2[offY][offX] = (1-omega) * (workingImgMat[offY][offX])\
                                                             + (omega/4) * (workingImgMat[offY-1][offX] + workingImgMat[offY+1][offX]\
-                                                                + workingImgMat[offY][offX+1] + workingImgMat[offY][offX-1])       
+                                                                + workingImgMat[offY][offX+1] + workingImgMat[offY][offX-1])
+                            else:
+                                workingImgMat2[offY][offX] = (1-omega) * (workingImgMat[offY][offX])\
+                                                            + (omega/4) * (workingImgMat2[offY-1][offX] + workingImgMat[offY+1][offX]\
+                                                                + workingImgMat[offY][offX+1] + workingImgMat2[offY][offX-1])
                 workingImgMat = workingImgMat2
                 #workingImgMat = deepcopy(workingImgMat2) # Reapplying the Jacobi method onto the primed system
                 n+=1
@@ -565,7 +583,7 @@ def SOR(workingImgMat, useSubmask, omega = 1, N = 200):
             n+=1
     return(workingImgMat)
 
-if (solverChoice == "SOR"):
+if (solverChoice == "Jacobi / SOR" or solverChoice == "Gauss-Seidel"):
     if (RGB):
         solvedImgMatRed = SOR(workingImgMatRed, useSubmask, omega = omega, N = N)
         solvedImgMatGreen = SOR(workingImgMatGreen, useSubmask, omega = omega, N = N)
@@ -573,7 +591,6 @@ if (solverChoice == "SOR"):
     else:
         solvedImgMat = SOR(workingImgMat, useSubmask, omega = omega, N = N)     
     
-
 # Manually converting the image back to take values between [0, 254].
 if (useSubmask):
     for i in range(0, len(reducedSubmasks)):
@@ -604,26 +621,25 @@ else:
     for y in range(len(imgMat)):
         for x in range(len(imgMat[y])):
             if RGB == True:
-                if solvedImgMatRed[offY][offX] > 254:
-                    solvedImgMatRed[offY][offX] = 254
-                elif solvedImgMatRed[offY][offX] < 1:
-                    solvedImgMatRed[offY][offX] = 0  
-                elif solvedImgMatGreen[offY][offX] > 254:
-                    solvedImgMatGreen[offY][offX] = 254
-                elif solvedImgMatGreen[offY][offX] < 1:
-                    solvedImgMatGreen[offY][offX] = 0  
-                elif solvedImgMatBlue[offY][offX] > 254:
-                    solvedImgMatBlue[offY][offX] = 254
-                elif solvedImgMatBlue[offY][offX] < 1:
-                    solvedImgMatBlue[offY][offX] = 0  
+                if solvedImgMatRed[y][x] > 254:
+                    solvedImgMatRed[y][x] = 254
+                elif solvedImgMatRed[y][x] < 1:
+                    solvedImgMatRed[y][x] = 0  
+                elif solvedImgMatGreen[y][x] > 254:
+                    solvedImgMatGreen[y][x] = 254
+                elif solvedImgMatGreen[y][x] < 1:
+                    solvedImgMatGreen[y][x] = 0  
+                elif solvedImgMatBlue[y][x] > 254:
+                    solvedImgMatBlue[y][x] = 254
+                elif solvedImgMatBlue[y][x] < 1:
+                    solvedImgMatBlue[y][x] = 0  
             else:
-                if solvedImgMat[offY][offX] > 254:
-                    solvedImgMat[offY][offX] = 254
-                elif solvedImgMat[offY][offX] < 1:
-                    solvedImgMat[offY][offX] = 0  
-
-
-''' # Some debugging stuff
+                if solvedImgMat[y][x] > 254:
+                    solvedImgMat[y][x] = 254
+                elif solvedImgMat[y][x] < 1:
+                    solvedImgMat[y][x] = 0
+             
+''' # DEBUGGING:
 outInt = np.zeros((len(reducedSubmasks[0]),len(reducedSubmasks[0][0])))
 for i in range(0, len(reducedSubmasks[0])):
     for j in range(0,len(reducedSubmasks[0][i])):
@@ -634,48 +650,42 @@ for i in range(len(outInt)):
     for j in range(len(outInt[0])):
         if outInt[i][j] > 255 or outInt[i][j] < 0 or outInt[i][j] == np.Inf or outInt[i][j] == np.NAN:
             print(outInt[i][j],reducedSubmasksOrigins[0][0]+i,reducedSubmasksOrigins[0][1]+j)
-'''              
-        
-if RGB == True:
-    RGBcomp = [[ [0 for col in range(3)] for col in range(len(RGBImgMat[0]))] for row in range(len(RGBImgMat))]
-    for i in range(len(RGBImgMat)):
-        for j in range(len(RGBImgMat[0])):
-            RGBcomp[i][j][0] = solvedImgMatRed[i][j]
-            RGBcomp[i][j][1] = solvedImgMatGreen[i][j]
-            RGBcomp[i][j][2] = solvedImgMatBlue[i][j]
-    solvedImgMat = np.array(RGBcomp)
-    solvedIm = Image.fromarray(solvedImgMat.astype(np.uint8))
-    if solvedIm.mode != 'RGB':
-        solvedIm = solvedIm.convert('RGB')
-else:
-    solvedImgMat = np.array(solvedImgMat)
-    solvedIm = Image.fromarray(solvedImgMat.astype(np.uint8))
-    solvedIm = solvedIm.convert("L")
+'''  
 
-solvedImOutPath = "SOLVED_IMAGE.png"
-solvedIm.save(solvedImOutPath)
-cpimgIm.show(title = "masked") #showing masked image
-solvedIm.show(title = "solved") # showing solved image
 
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~ Discrepancy scoring ~~~~~~~~~~~~~~~~~~~~~~~~~ '''
 '''
-    Comparing the graffiti sprayed regions to those of those regions in the original image.
+    Comparing the graffiti sprayed regions to those of those regions in the 
+    original image. Based on whether we are using a submask or not, this will 
+    either loop over the whole image or just over the submasks to save time.
+    Measuring the difference between intensities of solved image, and original
+    image, using the Chi^2 equation 1 in the project description.
 '''
 startedRunningDiscrepancy = time.perf_counter()
 
-def CalculateDiscrepancyScore():
+def CalculateDiscrepancyScore(original, solved):
+    '''
+    Input(s):
+        original {nested array}: The original image, from which the solved image is to be compared.
+        solved {nested array}: The solved image.
+    Output(s):
+        AvChiSq {float}: The average chi-squared discrepancy calculation across all the solved regions.
+    '''
     print()
-    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Discrepancy ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
+    print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ Discrepancy ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")   
+    AvChiSq = 0
     if(useSubmask):
         for i in range(0, len(reducedSubmasks)):
-            diffsq=0
+            diffsq=np.zeros((len(original),1))
+            chiAv = 0
             chiSq=[]
-            sigmasq=0
-            origIsum=0
+            sigmasq=np.zeros((len(original),1))
+            origIsum=np.zeros((len(original),1))
+            Imean = np.zeros((len(original),1))
             submask = reducedSubmasks[i]
             xOff = reducedSubmasksOrigins[i][0]
             yOff = reducedSubmasksOrigins[i][1]
-            subYlength = len(submask)        
+            subYlength = len(submask)                          
             # get average intensity 'Imean' in submask area on original image
             if len(reducedSubmasks) > 0:
                 for y in range(subYlength):
@@ -685,50 +695,92 @@ def CalculateDiscrepancyScore():
                         if (IsMask(I(x, y, canvas = submask))):
                             offX = x+xOff
                             offY = y+yOff
-                            origIsum = origIsum + int(I(offX, offY, canvas = oimgMat))                      
-                Imean = origIsum/subNumPix              
+                            for j in range(len(original)):
+                                origIsum[j]=origIsum[j]+(int(I(offX, offY, canvas = original[j])))   
+                for j in range(len(origIsum)):
+                    Imean[j]=(np.sum(np.array(origIsum[j]))/subNumPix)              
             # get chi squared
             for y in range(len(submask)):
                 for x in range(len(submask[y])):
                     if (IsMask(I(x, y, canvas = submask))):
                         offX = x+xOff
-                        offY = y+yOff            
-                        diffsq = diffsq + (I(offX, offY, canvas = solvedImgMat)-I(offX, offY, canvas = oimgMat))**2
-                        sigmasq = sigmasq + int((I(offX, offY, canvas = oimgMat) - Imean)**2)
-            if subNumPix > 0 and sigmasq > 0:                           
-                sigmasq = sigmasq/(subNumPix-1)            
-                chiSq.append((diffsq/subNumPix)/sigmasq)
-                print('SubMask number:', i+1, '\u03C7\u00B2 =',(diffsq/subNumPix)/sigmasq)
+                        offY = y+yOff      
+                        
+                        for j in range(len(original)):
+                            diffsq[j]=diffsq[j] + ((I(offX, offY, canvas = solved[j])-I(offX, offY, canvas = original[j]))**2)
+                            sigmasq[j]=sigmasq[j] + (int((I(offX, offY, canvas = original[j]) - Imean[j])**2))
+            
+            if subNumPix > 0 and np.sum(np.array(sigmasq)) > 0:
+                for j in range(len(diffsq)):
+                    sigmasq[j]=(sigmasq[j]/(subNumPix-1))
+                    chiAv = chiAv + (diffsq[j]/subNumPix)/sigmasq[j]
+                    
+                chiAv = chiAv/len(diffsq)  
+                chiSq.append(chiAv)
+                print('SubMask number:', i+1, '\u03C7\u00B2 =',(chiAv))
             else:
-                print('SubMask number:', i+1, '\u03C7\u00B2 =',"NaN")               
+                print('SubMask number:', i+1, '\u03C7\u00B2 =',"NaN")            
         chisum= 0     
         for i in range(0, len(chiSq)):
             chisum = chisum + chiSq[i]   
-        print('average chi sq: ', chisum/len(chiSq))
+        AvChiSq = chisum/len(chiSq)     
     else:
-        diffsq=0
-        chiSq=0
-        sigmasq=0
-        origIsum=0     
+        diffsq=np.zeros((len(original),1))
+        sigmasq=np.zeros((len(original),1))
+        origIsum=np.zeros((len(original),1))
+        Imean = np.zeros((len(original),1))       
         # get average intensity 'Imean' in submask area on original image
         for y in range(len(imgMat)):
             for x in range(len(imgMat[y])):
                 if (IsMask(I(x, y, canvas = maskMat))):
-                    origIsum += int(I(x, y, canvas = oimgMat))   
+                    for j in range(len(original)):
+                        origIsum[j]=origIsum[j]+(int(I(x, y, canvas = original[j])))    
         numPix = len(imgMat) * len(imgMat[y])
-        Imean = origIsum/numPix              
+        for j in range(len(origIsum)):
+            Imean[j]=(np.sum(np.array(origIsum[j]))/numPix)             
         # get chi squared
         for y in range(len(imgMat)):
             for x in range(len(imgMat[y])):
-                if (IsMask(I(x, y, canvas = maskMat))):        
-                    diffsq += (I(x, y, canvas = solvedImgMat)-I(x, y, canvas = oimgMat))**2
-                    sigmasq = sigmasq + int((I(x, y, canvas = oimgMat) - Imean)**2)
-        if numPix > 0 and sigmasq > 0:                           
-            sigmasq = sigmasq/(numPix-1)            
-            chiSq = (diffsq/numPix)/sigmasq
-            print('\u03C7\u00B2 =',(diffsq/numPix)/sigmasq)             
-  
-CalculateDiscrepancyScore()
+                if (IsMask(I(x, y, canvas = maskMat))):
+                    for j in range(len(original)):
+                        diffsq[j]=diffsq[j] + ((I(x, y, canvas = solved[j])-I(x, y, canvas = original[j]))**2)
+                        sigmasq[j]=sigmasq[j] + (int((I(x, y, canvas = original[j]) - Imean[j])**2))                
+        if numPix > 0 and np.sum(np.array(sigmasq)) > 0:
+            for j in range(len(diffsq)):
+                sigmasq[j]=(sigmasq[j]/(numPix-1))
+                AvChiSq = AvChiSq + (diffsq[j]/numPix)/sigmasq[j]                              
+    return AvChiSq
+
+if RGB == True:
+    RGBcomp = [[ [0 for col in range(3)] for col in range(len(RGBImgMat[0]))] for row in range(len(RGBImgMat))]
+    for i in range(len(RGBImgMat)):
+        for j in range(len(RGBImgMat[0])):
+            RGBcomp[i][j][0] = solvedImgMatRed[i][j]
+            RGBcomp[i][j][1] = solvedImgMatGreen[i][j]
+            RGBcomp[i][j][2] = solvedImgMatBlue[i][j]        
+    oRGB=[oRedImgMat,oGreenImgMat,oBlueImgMat]
+    solRGB=[solvedImgMatRed,solvedImgMatGreen,solvedImgMatBlue] 
+    AvChiSq = CalculateDiscrepancyScore(oRGB, solRGB)
+    print('Average of avg \u03C7\u00B2 =',AvChiSq)
+    solvedImgMat = np.array(RGBcomp)
+    solvedIm = Image.fromarray(solvedImgMat.astype(np.uint8))
+    if solvedIm.mode != 'RGB':
+        solvedIm = solvedIm.convert('RGB')
+else:
+    oimgMatDiscrep = []                 #Increase dimension of img matrices
+    oimgMatDiscrep.append(oimgMat)
+    solvedImgMatDiscrep = []
+    solvedImgMatDiscrep.append(solvedImgMat)
+    AvChiSq = CalculateDiscrepancyScore(oimgMatDiscrep, solvedImgMatDiscrep)
+    print('Average \u03C7\u00B2 = ', AvChiSq) 
+    solvedImgMat = np.array(solvedImgMat)
+    solvedIm = Image.fromarray(solvedImgMat.astype(np.uint8))
+    solvedIm = solvedIm.convert("L")
+solvedImOutPath = "SOLVED_IMAGE.png"
+solvedIm.save(solvedImOutPath)
+cpimgIm.show(title = "masked") #showing masked image
+solvedIm.show(title = "solved") # showing solved image
+
  
 ''' ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ End timer ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ '''
 finishedRunning = time.perf_counter()
@@ -742,3 +794,4 @@ print("Total duration: " + str(finishedRunning - startedRunning) + " s.")
 print()
 print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 print()
+
